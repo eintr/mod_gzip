@@ -11,9 +11,15 @@
 
 #include <zlib.h>
 
+ngx_conf_enum_t gzip_flush_mode_e[] = {
+	{ngx_string("NO_FLUSH"), Z_NO_FLUSH},
+	{ngx_string("SYNC_FLUSH"), Z_SYNC_FLUSH},
+	{{0, NULL}, -1}
+};
 
 typedef struct {
     ngx_flag_t           enable;
+	ngx_int_t			flush_mode;
     ngx_flag_t           no_buffer;
 
     ngx_hash_t           types;
@@ -136,6 +142,14 @@ static ngx_command_t  ngx_http_gzip_filter_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       offsetof(ngx_http_gzip_conf_t, enable),
       NULL },
+
+    { ngx_string("gzip_flush_mode"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LIF_CONF
+                        |NGX_CONF_TAKE1,
+      ngx_conf_set_enum_slot,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      offsetof(ngx_http_gzip_conf_t, flush_mode),
+      &gzip_flush_mode_e },
 
     { ngx_string("gzip_buffers"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE2,
@@ -617,7 +631,11 @@ ngx_http_gzip_filter_deflate_start(ngx_http_request_t *r,
 
     ctx->last_out = &ctx->out;
     ctx->crc32 = crc32(0L, Z_NULL, 0);
-    ctx->flush = Z_NO_FLUSH;
+	if (conf->flush_mode == NGX_CONF_UNSET) {
+	    ctx->flush = Z_NO_FLUSH;
+	} else {
+	    ctx->flush = conf->flush_mode;
+	}
 
     return NGX_OK;
 }
@@ -658,7 +676,8 @@ ngx_http_gzip_filter_gzheader(ngx_http_request_t *r, ngx_http_gzip_ctx_t *ctx)
 static ngx_int_t
 ngx_http_gzip_filter_add_data(ngx_http_request_t *r, ngx_http_gzip_ctx_t *ctx)
 {
-    if (ctx->zstream.avail_in || ctx->flush != Z_NO_FLUSH || ctx->redo) {
+//    if (ctx->zstream.avail_in || ctx->flush != Z_NO_FLUSH || ctx->redo) {
+    if (ctx->zstream.avail_in || ctx->redo) {
         return NGX_OK;
     }
 
@@ -820,7 +839,7 @@ ngx_http_gzip_filter_deflate(ngx_http_request_t *r, ngx_http_gzip_ctx_t *ctx)
 
     if (ctx->flush == Z_SYNC_FLUSH) {
 
-        ctx->flush = Z_NO_FLUSH;
+        ctx->flush = conf->flush_mode==NGX_CONF_UNSET ? Z_NO_FLUSH : conf->flush_mode;
 
         cl = ngx_alloc_chain_link(r->pool);
         if (cl == NULL) {
@@ -1115,6 +1134,7 @@ ngx_http_gzip_create_conf(ngx_conf_t *cf)
      */
 
     conf->enable = NGX_CONF_UNSET;
+	conf->flush_mode = NGX_CONF_UNSET;
     conf->no_buffer = NGX_CONF_UNSET;
 
     conf->postpone_gzipping = NGX_CONF_UNSET_SIZE;
@@ -1134,6 +1154,7 @@ ngx_http_gzip_merge_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_http_gzip_conf_t *conf = child;
 
     ngx_conf_merge_value(conf->enable, prev->enable, 0);
+    ngx_conf_merge_value(conf->flush_mode, prev->flush_mode, 0);
     ngx_conf_merge_value(conf->no_buffer, prev->no_buffer, 0);
 
     ngx_conf_merge_bufs_value(conf->bufs, prev->bufs,

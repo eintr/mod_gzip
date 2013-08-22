@@ -1,0 +1,6 @@
+Just replace the same-name file in nginx source tree.
+
+src/http/modules/ngx_http_gzip_filter_module.c
+
+And compile.
+

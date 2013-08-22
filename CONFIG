@@ -1,0 +1,9 @@
+Added a new config:
+
+gzip_flush_mode {NO_FLUSH|SYNC_FLUSH};
+
+  NO_FLUSH: Keep the original module behavior.
+  SYNC_FLUSH: Send the response ASAP.
+
+As the cost, the SYNC_FLUSH would harm the compress ratio a little bit.
+
